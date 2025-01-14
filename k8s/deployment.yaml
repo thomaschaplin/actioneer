@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: actioneer-operator
+  namespace: actioneer-operator
+  labels:
+    app: actioneer-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: actioneer-operator
+  template:
+    metadata:
+      labels:
+        app: actioneer-operator
+    spec:
+      serviceAccountName: actioneer-operator-sa
+      containers:
+        - name: actioneer-operator
+          image: actioneer-operator:latest
+          imagePullPolicy: Never # Set to Never due to using local image and Kind cluster
+          ports:
+            - containerPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: actioneer-operator
+  namespace: actioneer-operator
+spec:
+  ports:
+    - port: 80
+      targetPort: 8080
+  selector:
+    app: actioneer-operator
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: actioneer-operator
+  labels:
+    name: actioneer-operator
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: actioneer-operator
+  name: actioneer-operator-role
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["create", "get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: actioneer-operator-rolebinding
+  namespace: actioneer-operator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: actioneer-operator-role
+subjects:
+  - kind: ServiceAccount
+    name: actioneer-operator-sa
+    namespace: actioneer-operator
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: actioneer-operator-sa
+  namespace: actioneer-operator
