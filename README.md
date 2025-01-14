@@ -1,4 +1,4 @@
-# README
+# Actioneer
 
 1. `go run main.go` to run the program
 2. `smee -u https://smee.io/1eOP0ZmjbtoBY9XS -p 8080` to run the smee client to forward the webhook to the local server
