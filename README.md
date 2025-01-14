@@ -9,7 +9,7 @@
 
 ## Roadmap
 
-- [] Workflow Schema
+- [ ] Workflow Schema
   - [x] Jobs
   - [x] Steps
   - [x] Actions
@@ -28,4 +28,4 @@
   - [ ] Webhook service to spin up a new pod for each webhook event
 - [ ] Examples
   - [ ] Simple CI/CD Pipeline
-- [] Split types for each action (example: checkout doesn't need "command" field)
+- [ ] Split types for each action (example: checkout doesn't need "command" field)
