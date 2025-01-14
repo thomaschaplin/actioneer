@@ -13,8 +13,8 @@
   - [x] Jobs
   - [x] Steps
   - [x] Actions
-  - [] Events
-- [] Actions
+  - [ ] Events
+- [ ] Actions
   - [x] Run (bash)
   - [x] Checkout (git clone)
   - [ ] AWS Commands
