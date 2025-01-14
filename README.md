@@ -1,3 +1,5 @@
+<img src="assets/logo.jpeg" alt="logo" width="256" height="256" />
+
 # Actioneer
 
 Actioneer is a lightweight, blazing-fast GitHub Actions clone built in Go. It provides a seamless way to define, orchestrate, and run CI/CD workflows locally or in your self-hosted environment. With Actioneer, developers can manage automated tasks and pipelines without relying on external services, ensuring greater flexibility, speed, and control over their DevOps processes.
