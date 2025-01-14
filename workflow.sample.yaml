@@ -1,0 +1,16 @@
+jobs:
+  checkout:
+    steps:
+      - action: checkout
+        repo: "https://github.com/thomaschaplin/github-actions-playground.git"
+        branch: "main"
+  list_files:
+    steps:
+      - action: run
+        command: ls -lrta
+      - action: run
+        command: ls .github
+  cat_readme:
+    steps:
+      - action: run
+        command: cat workflow.yaml
