@@ -18,7 +18,7 @@ spec:
       serviceAccountName: actioneer-operator-sa
       containers:
         - name: actioneer-operator
-          image: actioneer-operator:latest
+          image: github-actions-poc-service:latest
           imagePullPolicy: Never # Set to Never due to using local image and Kind cluster
           ports:
             - containerPort: 8080
