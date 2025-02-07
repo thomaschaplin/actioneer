@@ -1,14 +1,20 @@
 package main
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/google/uuid"
 	"io/ioutil"
 	"net/http"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
+	"time"
 	"thomaschaplin/github-actions-poc/actions"
 	"thomaschaplin/github-actions-poc/executor"
 	"thomaschaplin/github-actions-poc/parser"
@@ -29,98 +35,222 @@ func validateSignature(secret, body []byte, signature string) bool {
 func webhookHandler(w http.ResponseWriter, r *http.Request) {
 	// Read the payload
 	body, err := ioutil.ReadAll(r.Body)
+	defer r.Body.Close()
 	if err != nil {
+		logJSON(map[string]interface{}{
+			"event":     "error",
+			"message":   "Error reading request body",
+			"error":     err.Error(),
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
 		http.Error(w, "unable to read request body", http.StatusBadRequest)
 		return
 	}
-	defer r.Body.Close()
 
 	// Validate the GitHub signature
 	signature := r.Header.Get("X-Hub-Signature-256")
+	if signature == "" {
+		logJSON(map[string]interface{}{
+			"event":     "security_alert",
+			"message":   "Missing X-Hub-Signature-256",
+			"status":    "403 Forbidden",
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		http.Error(w, "Missing signature", http.StatusForbidden)
+		return
+	}
 	if !validateSignature([]byte(webhookSecret), body, signature) {
+		logJSON(map[string]interface{}{
+			"event":     "security_alert",
+			"message":   "Invalid signature",
+			"status":    "403 Forbidden",
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
 		http.Error(w, "invalid signature", http.StatusForbidden)
 		return
 	}
 
-	fmt.Println("Valid webhook received")
-
 	// Parse the payload
 	var payload map[string]interface{}
 	if err := json.Unmarshal(body, &payload); err != nil {
+		logJSON(map[string]interface{}{
+			"event":     "error",
+			"message":   "Invalid JSON payload",
+			"error":     err.Error(),
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
 		http.Error(w, "invalid JSON payload", http.StatusBadRequest)
 		return
 	}
 
-	// Log the received payload
-	// fmt.Printf("Received payload: %+v\n", payload)
+	// Log webhook reception
+	logJSON(map[string]interface{}{
+		"event":     "webhook_received",
+		"message":   "Received GitHub webhook",
+		"payload":   payload,
+		"timestamp": time.Now().Format(time.RFC3339),
+	})
 
-	// Check for push event and process it
 	if eventName := r.Header.Get("X-GitHub-Event"); eventName == "push" {
 		processPushEvent(payload)
 	}
 
-	// Respond to GitHub
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("Webhook received"))
 }
 
-// processPushEvent handles the push event payload
 func processPushEvent(payload map[string]interface{}) {
-	var ref string
+	var ref, commitMessage, author, commitSha string
+
+	// Extract the ref
 	if r, ok := payload["ref"].(string); ok {
 		ref = r
-		fmt.Printf("Push event received for ref: %s\n", ref)
 	}
 
+	// Extract the commit data
 	if headCommit, ok := payload["head_commit"].(map[string]interface{}); ok {
-		if message, exists := headCommit["message"].(string); exists {
-			fmt.Printf("Commit message: %s\n", message)
+		if id, exists := headCommit["id"].(string); exists {
+			commitSha = id
 		}
-		if author, exists := headCommit["author"].(map[string]interface{}); exists {
-			if name, exists := author["name"].(string); exists {
-				fmt.Printf("Author: %s\n", name)
+		if message, exists := headCommit["message"].(string); exists {
+			commitMessage = message
+		}
+		if authorData, exists := headCommit["author"].(map[string]interface{}); exists {
+			if name, exists := authorData["name"].(string); exists {
+				author = name
 			}
 		}
 	}
 
+	// Extract the repository data
 	repoData, repoExists := payload["repository"].(map[string]interface{})
 	if !repoExists {
-		fmt.Println("Error: repository data is missing")
+		logJSON(map[string]interface{}{
+			"event":     "error",
+			"message":   "Repository data is missing",
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
 		return
 	}
 
+	// Extract the repository URL
 	repoUrl, ok := repoData["html_url"].(string)
 	if !ok {
-		fmt.Println("Error: repoUrl is not a string")
+		logJSON(map[string]interface{}{
+			"event":     "error",
+			"message":   "repoUrl is not a string",
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
 		return
 	}
 
-	fmt.Println("Processing push event for repo: ", repoUrl)
+	// Log commit details
+	logJSON(map[string]interface{}{
+		"event":          "push_event_received",
+		"repository":     repoUrl,
+		"commit_sha":     commitSha,
+		"commit_message": commitMessage,
+		"author":         author,
+		"timestamp":      time.Now().Format(time.RFC3339),
+	})
+
+	// Clone the repository
 	if ref != "" {
 		actions.Checkout("Checkout", repoUrl, strings.TrimPrefix(ref, "refs/heads/"), "./repo")
 	} else {
-		fmt.Println("Error: ref is empty")
-	}
-
-	workflowFile := "./repo/workflow.yaml"
-
-	workflow, err := parser.ParseWorkflow(workflowFile)
-	if err != nil {
-		fmt.Printf("Error parsing workflow: %v\n", err)
+		logJSON(map[string]interface{}{
+			"event":     "error",
+			"message":   "ref is empty",
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
 		return
 	}
 
-	fmt.Printf("Parsed workflow: %+v\n", workflow)
+	// Parse the workflow file
+	workflowFile := "./repo/workflow.yaml"
+	workflow, err := parser.ParseWorkflow(workflowFile)
+	if err != nil {
+		logJSON(map[string]interface{}{
+			"event":     "workflow_parse_error",
+			"message":   "Failed to parse workflow",
+			"error":     err.Error(),
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
 
-	fmt.Println("\nExecuting workflow... \n")
+	// Generate execution ID
+	executionId := uuid.New().String()
+
+	// Log execution start
+	logJSON(map[string]interface{}{
+		"id":        executionId,
+		"event":     "workflow_execution_start",
+		"message":   "Executing workflow",
+		"workflow":  workflow,
+		"timestamp": time.Now().Format(time.RFC3339),
+	})
+
 	executor.ExecuteWorkflow(workflow)
-	fmt.Println("\nExecution completed! \n")
+
+	// Log execution completion
+	logJSON(map[string]interface{}{
+		"id":        executionId,
+		"event":     "workflow_execution_completed",
+		"message":   "Execution completed",
+		"timestamp": time.Now().Format(time.RFC3339),
+	})
 }
 
 func main() {
+	logID := uuid.New().String()
+
+	// Log server startup
+	logJSON(map[string]interface{}{
+		"id":        logID,
+		"event":     "server_start",
+		"message":   "Starting server",
+		"port":      8080,
+		"timestamp": time.Now().Format(time.RFC3339),
+	})
+
+	server := &http.Server{Addr: ":8080"}
+	go gracefulShutdown(server)
+
 	http.HandleFunc("/", webhookHandler)
-	fmt.Println("Starting server on :8080...")
-	if err := http.ListenAndServe(":8080", nil); err != nil {
-		panic(err)
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		logJSON(map[string]interface{}{
+			"event":   "server_error",
+			"message": "Server failed",
+			"error":   err.Error(),
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
 	}
+}
+
+// Graceful shutdown for handling OS signals
+func gracefulShutdown(server *http.Server) {
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+
+	<-stop
+	logJSON(map[string]interface{}{
+		"event":     "server_shutdown",
+		"message":   "Shutting down server",
+		"timestamp": time.Now().Format(time.RFC3339),
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	server.Shutdown(ctx)
+}
+
+// Helper function to print JSON logs
+func logJSON(logData map[string]interface{}) {
+	jsonData, err := json.MarshalIndent(logData, "", "  ")
+	if err != nil {
+		fmt.Println(`{"event": "error", "message": "Error marshalling JSON", "error": "` + err.Error() + `"}`)
+		return
+	}
+	fmt.Println(string(jsonData))
 }
