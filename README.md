@@ -19,15 +19,42 @@ Install the following dependencies:
 - [Go](https://golang.org/doc/install)
 - [smee-client](https://github.com/probot/smee-client)
 
-1. `go run main.go` to run the program
-2. Visit `https://smee.io` to start a new webhook and copy the URL and ID
-3. Create a [new webhook](https://docs.github.com/en/webhooks/using-webhooks/creating-webhooks) in a GitHub repository and paste the URL from step 2
-4. Keep the website open to view the webhook events as they come in
-5. Run `smee -u https://smee.io/<ID> -p 8080` to forward the webhook to the local server
-6. `smee -u https://smee.io/<ID> -p 8080` to run the smee client to forward the webhook to the local server
-7. Trigger the webhook by pushing a commit to the repository which has the webhook configured
-8. The webhook event should be visible in the smee client and the local server should log the event
-9. If you need to rerun the POST you can do so via the smee web interface
+1. Clone the repository
+2. Run `export ACTIONEER_WEBHOOK_SECRET="your_secret"` to set the webhook secret
+3. Run `go run main.go` to start the server
+4. Visit `https://smee.io` to start a new webhook and copy the URL and ID
+5. Create a [new webhook](https://docs.github.com/en/webhooks/using-webhooks/creating-webhooks) in a GitHub repository and paste the URL from step 2
+6. Keep the website open to view the webhook events as they come in
+7. Run `smee -u https://smee.io/<ID> -p 8080` to forward the webhook to the local server
+8. `smee -u https://smee.io/<ID> -p 8080` to run the smee client to forward the webhook to the local server
+9. Trigger the webhook by pushing a commit to the repository which has the webhook configured
+10. The webhook event should be visible in the smee client and the local server should log the event
+11. If you need to rerun the POST you can do so via the smee web interface
+
+## Usage
+
+Actioneer uses a YAML-based syntax to define workflows. Here's an example of a simple workflow that runs some bash commands:
+
+```yaml
+jobs:
+  # Use the below "action" to checkout another repository
+  # checkout:
+  #   steps:
+  #     - action: checkout
+  #       repo: "https://github.com/thomaschaplin/actioneer.git"
+  list_files:
+    steps:
+      - action: run
+        command: ls -lrta
+      - action: run
+        command: ls actions
+      - action: run
+        command: cat .gitignore
+  cat_readme:
+    steps:
+      - action: run
+        command: cat README.md
+```
 
 ## Roadmap
 

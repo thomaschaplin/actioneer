@@ -1,0 +1,18 @@
+jobs:
+  # Use the below "action" to checkout another repository
+  # checkout:
+  #   steps:
+  #     - action: checkout
+  #       repo: "https://github.com/thomaschaplin/actioneer.git"
+  list_files:
+    steps:
+      - action: run
+        command: ls -lrta
+      - action: run
+        command: ls actions
+      - action: run
+        command: cat .gitignore
+  cat_readme:
+    steps:
+      - action: run
+        command: cat workflow.yaml
