@@ -6,22 +6,22 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
-	"github.com/google/uuid"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
-	"time"
 	"thomaschaplin/github-actions-poc/actions"
 	"thomaschaplin/github-actions-poc/executor"
+	"thomaschaplin/github-actions-poc/logger"
 	"thomaschaplin/github-actions-poc/parser"
+	"time"
+
+	"github.com/google/uuid"
 )
 
-// Replace with your actual webhook secret
-const webhookSecret = "mywebhooksecret"
+var webhookSecret = os.Getenv("ACTIONEER_WEBHOOK_SECRET")
 
 // validateSignature checks if the request signature matches the expected signature
 func validateSignature(secret, body []byte, signature string) bool {
@@ -37,7 +37,7 @@ func webhookHandler(w http.ResponseWriter, r *http.Request) {
 	body, err := ioutil.ReadAll(r.Body)
 	defer r.Body.Close()
 	if err != nil {
-		logJSON(map[string]interface{}{
+		logger.LogJSON(map[string]interface{}{
 			"event":     "error",
 			"message":   "Error reading request body",
 			"error":     err.Error(),
@@ -50,7 +50,7 @@ func webhookHandler(w http.ResponseWriter, r *http.Request) {
 	// Validate the GitHub signature
 	signature := r.Header.Get("X-Hub-Signature-256")
 	if signature == "" {
-		logJSON(map[string]interface{}{
+		logger.LogJSON(map[string]interface{}{
 			"event":     "security_alert",
 			"message":   "Missing X-Hub-Signature-256",
 			"status":    "403 Forbidden",
@@ -60,7 +60,7 @@ func webhookHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !validateSignature([]byte(webhookSecret), body, signature) {
-		logJSON(map[string]interface{}{
+		logger.LogJSON(map[string]interface{}{
 			"event":     "security_alert",
 			"message":   "Invalid signature",
 			"status":    "403 Forbidden",
@@ -73,7 +73,7 @@ func webhookHandler(w http.ResponseWriter, r *http.Request) {
 	// Parse the payload
 	var payload map[string]interface{}
 	if err := json.Unmarshal(body, &payload); err != nil {
-		logJSON(map[string]interface{}{
+		logger.LogJSON(map[string]interface{}{
 			"event":     "error",
 			"message":   "Invalid JSON payload",
 			"error":     err.Error(),
@@ -84,7 +84,7 @@ func webhookHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Log webhook reception
-	logJSON(map[string]interface{}{
+	logger.LogJSON(map[string]interface{}{
 		"event":     "webhook_received",
 		"message":   "Received GitHub webhook",
 		"payload":   payload,
@@ -125,7 +125,7 @@ func processPushEvent(payload map[string]interface{}) {
 	// Extract the repository data
 	repoData, repoExists := payload["repository"].(map[string]interface{})
 	if !repoExists {
-		logJSON(map[string]interface{}{
+		logger.LogJSON(map[string]interface{}{
 			"event":     "error",
 			"message":   "Repository data is missing",
 			"timestamp": time.Now().Format(time.RFC3339),
@@ -136,7 +136,7 @@ func processPushEvent(payload map[string]interface{}) {
 	// Extract the repository URL
 	repoUrl, ok := repoData["html_url"].(string)
 	if !ok {
-		logJSON(map[string]interface{}{
+		logger.LogJSON(map[string]interface{}{
 			"event":     "error",
 			"message":   "repoUrl is not a string",
 			"timestamp": time.Now().Format(time.RFC3339),
@@ -145,7 +145,7 @@ func processPushEvent(payload map[string]interface{}) {
 	}
 
 	// Log commit details
-	logJSON(map[string]interface{}{
+	logger.LogJSON(map[string]interface{}{
 		"event":          "push_event_received",
 		"repository":     repoUrl,
 		"commit_sha":     commitSha,
@@ -154,11 +154,21 @@ func processPushEvent(payload map[string]interface{}) {
 		"timestamp":      time.Now().Format(time.RFC3339),
 	})
 
+	deleteErr := logger.DeleteLogs()
+	if deleteErr != nil {
+		logger.LogJSON(map[string]interface{}{
+			"event":     "configuration_error",
+			"message":   "ACTIONEER_WEBHOOK_SECRET is not set",
+			"error":     deleteErr.Error(),
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+	}
+
 	// Clone the repository
 	if ref != "" {
 		actions.Checkout("Checkout", repoUrl, strings.TrimPrefix(ref, "refs/heads/"), "./repo")
 	} else {
-		logJSON(map[string]interface{}{
+		logger.LogJSON(map[string]interface{}{
 			"event":     "error",
 			"message":   "ref is empty",
 			"timestamp": time.Now().Format(time.RFC3339),
@@ -170,7 +180,7 @@ func processPushEvent(payload map[string]interface{}) {
 	workflowFile := "./repo/workflow.yaml"
 	workflow, err := parser.ParseWorkflow(workflowFile)
 	if err != nil {
-		logJSON(map[string]interface{}{
+		logger.LogJSON(map[string]interface{}{
 			"event":     "workflow_parse_error",
 			"message":   "Failed to parse workflow",
 			"error":     err.Error(),
@@ -183,7 +193,7 @@ func processPushEvent(payload map[string]interface{}) {
 	executionId := uuid.New().String()
 
 	// Log execution start
-	logJSON(map[string]interface{}{
+	logger.LogJSON(map[string]interface{}{
 		"id":        executionId,
 		"event":     "workflow_execution_start",
 		"message":   "Executing workflow",
@@ -194,7 +204,7 @@ func processPushEvent(payload map[string]interface{}) {
 	executor.ExecuteWorkflow(workflow)
 
 	// Log execution completion
-	logJSON(map[string]interface{}{
+	logger.LogJSON(map[string]interface{}{
 		"id":        executionId,
 		"event":     "workflow_execution_completed",
 		"message":   "Execution completed",
@@ -203,10 +213,20 @@ func processPushEvent(payload map[string]interface{}) {
 }
 
 func main() {
+	webhookSecret := os.Getenv("ACTIONEER_WEBHOOK_SECRET")
+	if webhookSecret == "" {
+		logger.LogJSON(map[string]interface{}{
+			"event":     "configuration_error",
+			"message":   "ACTIONEER_WEBHOOK_SECRET is not set",
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		os.Exit(1)
+	}
+
 	logID := uuid.New().String()
 
 	// Log server startup
-	logJSON(map[string]interface{}{
+	logger.LogJSON(map[string]interface{}{
 		"id":        logID,
 		"event":     "server_start",
 		"message":   "Starting server",
@@ -219,10 +239,10 @@ func main() {
 
 	http.HandleFunc("/", webhookHandler)
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		logJSON(map[string]interface{}{
-			"event":   "server_error",
-			"message": "Server failed",
-			"error":   err.Error(),
+		logger.LogJSON(map[string]interface{}{
+			"event":     "server_error",
+			"message":   "Server failed",
+			"error":     err.Error(),
 			"timestamp": time.Now().Format(time.RFC3339),
 		})
 	}
@@ -234,7 +254,7 @@ func gracefulShutdown(server *http.Server) {
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
 	<-stop
-	logJSON(map[string]interface{}{
+	logger.LogJSON(map[string]interface{}{
 		"event":     "server_shutdown",
 		"message":   "Shutting down server",
 		"timestamp": time.Now().Format(time.RFC3339),
@@ -243,14 +263,4 @@ func gracefulShutdown(server *http.Server) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	server.Shutdown(ctx)
-}
-
-// Helper function to print JSON logs
-func logJSON(logData map[string]interface{}) {
-	jsonData, err := json.MarshalIndent(logData, "", "  ")
-	if err != nil {
-		fmt.Println(`{"event": "error", "message": "Error marshalling JSON", "error": "` + err.Error() + `"}`)
-		return
-	}
-	fmt.Println(string(jsonData))
 }
