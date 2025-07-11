@@ -1,0 +1,3 @@
+# Actioneer ephemeral directories
+.actioneer-tmp/**
+bin/**

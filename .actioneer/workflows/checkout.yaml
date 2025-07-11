@@ -1,0 +1,10 @@
+pipeline:
+  name: Checkout and Cat Files Example
+  steps:
+    - name: checkout
+      uses: actions/checkout@v1
+      url: https://github.com/thomaschaplin/kilokeeper.git
+    - name: cat files
+      uses: actions/cat@v1
+      files:
+        - README.md

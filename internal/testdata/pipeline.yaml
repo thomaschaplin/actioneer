@@ -1,0 +1,9 @@
+pipeline:
+  name: test-pipeline
+  steps:
+    - name: checkout
+      uses: actions/checkout@v1
+      url: https://github.com/example/repo.git
+    - name: echo
+      uses: actions/shell@v1
+      command: echo Hello World

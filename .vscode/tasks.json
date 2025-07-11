@@ -1,0 +1,33 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Run Actioneer",
+      "type": "shell",
+      "command": "go run ./cmd/main.go ${input:actioneerArg}",
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Build Actioneer",
+      "type": "shell",
+      "command": "go build -o bin/actioneer ./cmd/main.go",
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Test Actioneer",
+      "type": "shell",
+      "command": "go test ./internal/... -v",
+      "group": "test",
+      "problemMatcher": ["$go"]
+    }
+  ],
+  "inputs": [
+    {
+      "id": "actioneerArg",
+      "type": "promptString",
+      "description": "Enter workflow YAML (e.g. shell.yaml) or --webhook for server mode"
+    }
+  ]
+}

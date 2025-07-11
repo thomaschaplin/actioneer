@@ -1,0 +1,9 @@
+pipeline:
+  name: Shell Command Example
+  steps:
+    - name: checkout
+      uses: actions/checkout@v1
+      url: https://github.com/thomaschaplin/kilokeeper.git
+    - name: run shell command
+      uses: actions/shell@v1
+      command: ls -l

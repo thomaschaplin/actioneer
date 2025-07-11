@@ -1,0 +1,28 @@
+pipeline:
+  name: Upload and Download Artifact Example
+  steps:
+    - name: checkout
+      uses: actions/checkout@v1
+      url: https://github.com/thomaschaplin/kilokeeper.git
+    - name: cat readme
+      uses: actions/cat@v1
+      files:
+        - main.go
+        - README.md
+    - name: upload artifact
+      uses: actions/upload-artifact@v1
+      files:
+        - main.go
+        - README.md
+    - name: checkout
+      uses: actions/checkout@v1
+      url: https://github.com/thomaschaplin/actioneer.git
+    - name: download artifact
+      uses: actions/download-artifact@v1
+      files:
+        - main.go
+    - name: run shell command
+      uses: actions/cat@v1
+      files:
+        - main.go
+        - README.md

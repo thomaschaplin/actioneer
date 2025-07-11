@@ -1,0 +1,6 @@
+pipeline:
+  name: test-pipeline
+  steps:
+    - name: checkout
+      uses: actions/checkout@v1
+      url: [not-a-string]
