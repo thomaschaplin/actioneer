@@ -4,6 +4,31 @@
 
 Actioneer is a lightweight, blazing-fast CI/CD engine written in Go. It enables you to define and run pipelines using simple YAML workflows, supporting various built-in actions commonly found in pipeline automation.
 
+## Table of Contents
+- [Actioneer](#actioneer)
+  - [Table of Contents](#table-of-contents)
+  - [Features](#features)
+  - [Architecture](#architecture)
+  - [Quick Start](#quick-start)
+  - [Running Actioneer](#running-actioneer)
+    - [CLI Mode](#cli-mode)
+    - [Webhook Mode](#webhook-mode)
+  - [Example Workflows](#example-workflows)
+    - [1. Checkout and Cat Files](#1-checkout-and-cat-files)
+    - [2. Shell Command](#2-shell-command)
+    - [3. Environment Variables](#3-environment-variables)
+    - [4. Upload and Download Artifact](#4-upload-and-download-artifact)
+  - [Configuration Reference](#configuration-reference)
+  - [Performance and Speed](#performance-and-speed)
+    - [Time Logging](#time-logging)
+  - [Supported Actions \& Extensibility](#supported-actions--extensibility)
+    - [Extending Actioneer](#extending-actioneer)
+  - [Testing](#testing)
+    - [Running Tests](#running-tests)
+    - [Writing Tests](#writing-tests)
+    - [Test Philosophy](#test-philosophy)
+  - [License](#license)
+
 ## Features
 - **Modular architecture:** Easily add or extend actions.
 - **Configurable pipelines:** Define workflows in YAML.
@@ -25,7 +50,7 @@ Actioneer is a lightweight, blazing-fast CI/CD engine written in Go. It enables 
 - **pkg/**: (Reserved for public packages/extensions.)
 - **.actioneer/workflows/**: Example workflow YAMLs.
 
-## Getting Started
+## Quick Start
 
 1. **Install Go:** https://golang.org/doc/install
 2. **Clone the repo:**
@@ -33,13 +58,48 @@ Actioneer is a lightweight, blazing-fast CI/CD engine written in Go. It enables 
    git clone https://github.com/thomaschaplin/actioneer.git
    cd actioneer
    ```
-3. **Run a workflow:**
+3. **Build Actioneer:**
    ```sh
-   go run ./cmd/main.go <workflow.yaml>
-   # Example:
-   go run ./cmd/main.go checkout.yaml
+   go build -o bin/actioneer ./cmd/main.go
    ```
-   Workflows are in `.actioneer/workflows/`.
+
+## Running Actioneer
+
+Actioneer can be run in two modes:
+
+### CLI Mode
+Run workflows directly from the command line:
+
+```sh
+go run ./cmd/main.go <workflow.yaml>
+# Or, if built:
+./bin/actioneer <workflow.yaml>
+# Example:
+./bin/actioneer shell.yaml
+```
+
+### Webhook Mode
+Run as a server and trigger workflows via HTTP POST requests (default port: 8080):
+
+```sh
+go run ./cmd/main.go --webhook
+# Or, if built:
+./bin/actioneer --webhook
+```
+
+Trigger a workflow by sending a POST request to `/webhook`:
+
+```sh
+curl -X POST http://localhost:8080/webhook \
+  -H "Content-Type: application/json" \
+  -d '{"workflow":"<workflow.yaml>"}'
+# Example:
+curl -X POST http://localhost:8080/webhook \
+  -H "Content-Type: application/json" \
+  -d '{"workflow":"shell.yaml"}'
+```
+
+Workflows are loaded from your `.actioneer/workflows/` directory.
 
 ## Example Workflows
 
@@ -164,7 +224,7 @@ Actioneer provides detailed timing information for each step and the overall pip
 
 All logs are in structured JSON for easy parsing and integration with log management tools.
 
-## Supported Actions and Extensibility Philosophy
+## Supported Actions & Extensibility
 
 Actioneer intentionally supports only a curated set of built-in actions. This design choice ensures:
 - **Efficiency:** All built-in actions are optimized for speed and minimal resource usage.
@@ -175,48 +235,9 @@ If your workflow requires functionality not covered by the built-in actions, you
 
 To request a new action, please open an issue or pull request on the Actioneer repository.
 
-## Extending Actioneer
+### Extending Actioneer
 - Add new actions by implementing an `ActionFunc` in Go and registering it in `internal/actions.go`.
 - See the built-in actions for examples.
-
-## Running Actioneer
-
-Actioneer can be run in two modes:
-
-- **CLI:** Run workflows directly from the command line.
-- **Webhook server:** Run as a server and trigger workflows via HTTP POST requests.
-
-### CLI Usage
-
-Run a workflow YAML directly:
-
-```sh
-go run ./cmd/main.go <workflow.yaml>
-# Example:
-go run ./cmd/main.go shell.yaml
-```
-
-### Webhook Usage
-
-Start Actioneer in webhook mode (default port: 8080):
-
-```sh
-go run ./cmd/main.go --webhook
-```
-
-You can then trigger a workflow by sending a POST request to `/webhook`:
-
-```sh
-curl -X POST http://localhost:8080/webhook \
-  -H "Content-Type: application/json" \
-  -d '{"workflow":"<workflow.yaml>"}'
-# Example:
-curl -X POST http://localhost:8080/webhook \
-  -H "Content-Type: application/json" \
-  -d '{"workflow":"shell.yaml"}'
-```
-
-This will execute the specified workflow (e.g., `shell.yaml`) from your `.actioneer/workflows/` directory.
 
 ## Testing
 
